@@ -25,35 +25,35 @@ export function parseClubConfigs(clubsJson: string): ClubConfig[] {
 
     switch (provider) {
       case "playbypoint": {
-        const config = validateFacilityIdConfig(raw, "playbypoint");
-        if (config) {
-          validConfigs.push(config);
-        } else {
+        const result = validateFacilityIdConfig(raw, "playbypoint");
+        if (typeof result === "string") {
           console.error(
-            `Club config at index ${i}: invalid playbypoint config (requires non-empty "name" and "facilityId")`,
+            `Club config at index ${i}: invalid playbypoint config — ${result}`,
           );
+        } else {
+          validConfigs.push(result);
         }
         break;
       }
       case "matchpointer": {
-        const config = validateMatchPointerConfig(raw);
-        if (config) {
-          validConfigs.push(config);
-        } else {
+        const result = validateMatchPointerConfig(raw);
+        if (typeof result === "string") {
           console.error(
-            `Club config at index ${i}: invalid matchpointer config (requires non-empty "name" and "venueId")`,
+            `Club config at index ${i}: invalid matchpointer config — ${result}`,
           );
+        } else {
+          validConfigs.push(result);
         }
         break;
       }
-      case "supabase": {
-        const config = validateFacilityIdConfig(raw, "supabase");
-        if (config) {
-          validConfigs.push(config);
-        } else {
+      case "goplay": {
+        const result = validateFacilityIdConfig(raw, "goplay");
+        if (typeof result === "string") {
           console.error(
-            `Club config at index ${i}: invalid supabase config (requires non-empty "name" and "facilityId")`,
+            `Club config at index ${i}: invalid goplay config — ${result}`,
           );
+        } else {
+          validConfigs.push(result);
         }
         break;
       }
@@ -70,35 +70,37 @@ export function parseClubConfigs(clubsJson: string): ClubConfig[] {
 
 function validateFacilityIdConfig(
   raw: unknown,
-  provider: "playbypoint" | "supabase",
-): {
-  name: string;
-  facilityId: string;
-  provider: "playbypoint" | "supabase";
-} | null {
-  if (!raw || typeof raw !== "object") return null;
+  provider: "playbypoint" | "goplay",
+):
+  | { name: string; facilityId: string; provider: "playbypoint" | "goplay" }
+  | string {
+  if (!raw || typeof raw !== "object") return "entry is not an object";
 
   const obj = raw as Record<string, unknown>;
   const name = obj.name;
   const facilityId = obj.facilityId;
 
-  if (typeof name !== "string" || name.trim() === "") return null;
-  if (typeof facilityId !== "string" || facilityId.trim() === "") return null;
+  if (typeof name !== "string" || name.trim() === "")
+    return `missing or empty "name"`;
+  if (typeof facilityId !== "string" || facilityId.trim() === "")
+    return `missing or empty "facilityId"`;
 
   return { name, provider, facilityId };
 }
 
 function validateMatchPointerConfig(
   raw: unknown,
-): MatchPointerClubConfig | null {
-  if (!raw || typeof raw !== "object") return null;
+): MatchPointerClubConfig | string {
+  if (!raw || typeof raw !== "object") return "entry is not an object";
 
   const obj = raw as Record<string, unknown>;
   const name = obj.name;
   const venueId = obj.venueId;
 
-  if (typeof name !== "string" || name.trim() === "") return null;
-  if (typeof venueId !== "string" || venueId.trim() === "") return null;
+  if (typeof name !== "string" || name.trim() === "")
+    return `missing or empty "name"`;
+  if (typeof venueId !== "string" || venueId.trim() === "")
+    return `missing or empty "venueId"`;
 
   return {
     name,

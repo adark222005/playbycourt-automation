@@ -1,12 +1,11 @@
-import { fetchSupabaseFacilityAvailability } from "./supabaseApi.util";
+import { fetchGoPlayFacilityAvailability } from "./goplayApi.util";
 import {
   formatDate,
   formatDateISO,
-  formatHourDecimalToTimeString,
   parseHourStringToDecimal,
 } from "./date.utils";
 import { logWithTimestamp } from "./logger.utils";
-import { SupabaseAvailableSlot, TimeSlot } from "./types.util";
+import { GoPlayAvailableSlot, TimeSlot } from "./types.util";
 
 /**
  * Filter out malformed slots missing start_time or available_courts.
@@ -14,7 +13,7 @@ import { SupabaseAvailableSlot, TimeSlot } from "./types.util";
 export function filterMalformedSlots(
   slots: unknown[],
   facilityId: string,
-): SupabaseAvailableSlot[] {
+): GoPlayAvailableSlot[] {
   return slots.filter((slot: any) => {
     if (
       !slot ||
@@ -28,13 +27,13 @@ export function filterMalformedSlots(
       return false;
     }
     return true;
-  }) as SupabaseAvailableSlot[];
+  }) as GoPlayAvailableSlot[];
 }
 
 /**
  * Get all duration options across all courts for a slot (deduplicated).
  */
-export function getSlotDurationOptions(slot: SupabaseAvailableSlot): number[] {
+export function getSlotDurationOptions(slot: GoPlayAvailableSlot): number[] {
   const allDurations = new Set<number>();
   for (const court of slot.available_courts) {
     if (Array.isArray(court.duration_options)) {
@@ -51,7 +50,7 @@ export function getSlotDurationOptions(slot: SupabaseAvailableSlot): number[] {
  * across all courts, clipped to endHour.
  */
 export function slotsToTimeRanges(
-  slots: SupabaseAvailableSlot[],
+  slots: GoPlayAvailableSlot[],
   endHour: number,
 ): { start: number; end: number }[] {
   const ranges: { start: number; end: number }[] = [];
@@ -99,10 +98,10 @@ export function mergeRanges(
  * Filter slots whose start_time falls within [startHour, endHour).
  */
 export function filterSlotsByHourRange(
-  slots: SupabaseAvailableSlot[],
+  slots: GoPlayAvailableSlot[],
   startHour: number,
   endHour: number,
-): SupabaseAvailableSlot[] {
+): GoPlayAvailableSlot[] {
   return slots.filter((slot) => {
     const decimal = parseHourStringToDecimal(slot.start_time);
     return decimal >= startHour && decimal < endHour;
@@ -114,7 +113,7 @@ export function filterSlotsByHourRange(
  * converts slots to ranges, merges them, filters by minPlaytime,
  * and returns TimeSlot[] representing continuous available windows.
  */
-export async function getSupabaseSlots(
+export async function getGoPlaySlots(
   facilityId: string,
   dates: Date[],
   startHour: number,
@@ -123,10 +122,7 @@ export async function getSupabaseSlots(
 ): Promise<TimeSlot[]> {
   const requests = dates.map(async (date) => {
     const dateISO = formatDateISO(date);
-    const response = await fetchSupabaseFacilityAvailability(
-      facilityId,
-      dateISO,
-    );
+    const response = await fetchGoPlayFacilityAvailability(facilityId, dateISO);
 
     const validSlots = filterMalformedSlots(
       response.slots as unknown[],

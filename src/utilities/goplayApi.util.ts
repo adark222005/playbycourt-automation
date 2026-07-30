@@ -1,13 +1,13 @@
-import { SupabaseFacilityResponse } from "./types.util";
+import { GoPlayFacilityResponse } from "./types.util";
 
-const SUPABASE_URL =
+const GOPLAY_API_URL =
   "https://hhifcmpdogsyijohomxk.supabase.co/functions/v1/get-facility-court-availability";
 
-export async function fetchSupabaseFacilityAvailability(
+export async function fetchGoPlayFacilityAvailability(
   facilityId: string,
   date: string,
-): Promise<SupabaseFacilityResponse> {
-  const res = await fetch(SUPABASE_URL, {
+): Promise<GoPlayFacilityResponse> {
+  const res = await fetch(GOPLAY_API_URL, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -17,14 +17,14 @@ export async function fetchSupabaseFacilityAvailability(
 
   if (!res.ok) {
     const body = await res.text();
-    throw new Error(`Supabase API error ${res.status}: ${body}`);
+    throw new Error(`GoPlay API error ${res.status}: ${body}`);
   }
 
   const json = await res.json();
 
   if (!json || !Array.isArray(json.slots)) {
-    throw new Error("Invalid Supabase response: missing slots array");
+    throw new Error("Invalid GoPlay response: missing slots array");
   }
 
-  return json as SupabaseFacilityResponse;
+  return json as GoPlayFacilityResponse;
 }

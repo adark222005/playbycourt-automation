@@ -2,7 +2,7 @@ import { formatCourtMessage } from "@src/utilities/general.util";
 import { logScanParameters } from "@src/utilities/logger.utils";
 import { getPlayByPointSlots } from "@src/utilities/playByPointSlots.util";
 import { getMatchPointerSlots } from "@src/utilities/matchPointerSlots.util";
-import { getSupabaseSlots } from "@src/utilities/supabaseSlots.util";
+import { getGoPlaySlots } from "@src/utilities/goplaySlots.util";
 import {
   findNewSlots,
   hasAnySlotBecomeUnavailable,
@@ -62,8 +62,8 @@ async function fetchSlotsForClub(
         params.endHour,
         params.minPlaytimeHours,
       );
-    case "supabase":
-      return getSupabaseSlots(
+    case "goplay":
+      return getGoPlaySlots(
         club.facilityId,
         dates,
         params.startHour,

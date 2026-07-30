@@ -1,8 +1,8 @@
 import { test, expect } from "@playwright/test";
-import { fetchSupabaseFacilityAvailability } from "@utils/supabaseApi.util";
-import { getSupabaseSlots } from "@utils/supabaseSlots.util";
+import { fetchGoPlayFacilityAvailability } from "@utils/goplayApi.util";
+import { getGoPlaySlots } from "@utils/goplaySlots.util";
 
-const SUPABASE_URL =
+const GOPLAY_URL =
   "https://hhifcmpdogsyijohomxk.supabase.co/functions/v1/get-facility-court-availability";
 
 test.describe("API request format", () => {
@@ -38,9 +38,9 @@ test.describe("API request format", () => {
       } as Response;
     };
 
-    await fetchSupabaseFacilityAvailability("facility-123", "2025-03-15");
+    await fetchGoPlayFacilityAvailability("facility-123", "2025-03-15");
 
-    expect(capturedUrl).toBe(SUPABASE_URL);
+    expect(capturedUrl).toBe(GOPLAY_URL);
     expect(capturedInit?.method).toBe("POST");
     expect(capturedInit?.headers).toEqual({
       "Content-Type": "application/json",
@@ -86,7 +86,7 @@ test.describe("One request per date behavior", () => {
       new Date(2025, 2, 12),
     ];
 
-    await getSupabaseSlots("facility-abc", dates, 8, 20, 1);
+    await getGoPlaySlots("facility-abc", dates, 8, 20, 1);
 
     expect(callCount).toBe(3);
   });
@@ -112,8 +112,8 @@ test.describe("HTTP error response handling", () => {
       }) as Response;
 
     await expect(
-      fetchSupabaseFacilityAvailability("facility-123", "2025-03-15"),
-    ).rejects.toThrow(/Supabase API error 400/);
+      fetchGoPlayFacilityAvailability("facility-123", "2025-03-15"),
+    ).rejects.toThrow(/GoPlay API error 400/);
   });
 
   test("throws error with status code on 500 response", async () => {
@@ -125,8 +125,8 @@ test.describe("HTTP error response handling", () => {
       }) as Response;
 
     await expect(
-      fetchSupabaseFacilityAvailability("facility-123", "2025-03-15"),
-    ).rejects.toThrow(/Supabase API error 500/);
+      fetchGoPlayFacilityAvailability("facility-123", "2025-03-15"),
+    ).rejects.toThrow(/GoPlay API error 500/);
   });
 });
 
@@ -167,8 +167,7 @@ test.describe("Empty response / no slots", () => {
       }) as Response;
 
     const dates = [new Date(2025, 2, 15)];
-    // startHour=10 means 06:00 slot is out of range
-    const result = await getSupabaseSlots("my-facility", dates, 10, 22, 1);
+    const result = await getGoPlaySlots("my-facility", dates, 10, 22, 1);
 
     expect(result).toEqual([]);
   });
@@ -185,13 +184,13 @@ test.describe("Service-layer integration", () => {
     globalThis.fetch = originalFetch;
   });
 
-  test("getSupabaseSlots returns TimeSlot[] with correct shape", async () => {
+  test("getGoPlaySlots returns TimeSlot[] with correct shape", async () => {
     globalThis.fetch = async () =>
       ({
         ok: true,
         json: async () => ({
-          facility_id: "supabase-club-1",
-          facility_name: "Supabase Club",
+          facility_id: "goplay-club-1",
+          facility_name: "GoPlay Club",
           date: "2025-03-15",
           slots: [
             {
@@ -228,7 +227,7 @@ test.describe("Service-layer integration", () => {
       }) as Response;
 
     const dates = [new Date(2025, 2, 15)];
-    const result = await getSupabaseSlots("supabase-club-1", dates, 8, 22, 1);
+    const result = await getGoPlaySlots("goplay-club-1", dates, 8, 22, 1);
 
     expect(Array.isArray(result)).toBe(true);
     expect(result.length).toBeGreaterThan(0);

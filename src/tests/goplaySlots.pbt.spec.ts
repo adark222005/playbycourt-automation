@@ -2,7 +2,7 @@ import { test, expect } from "@playwright/test";
 import fc from "fast-check";
 import { parseClubConfigs } from "@utils/clubConfig.util";
 
-// Feature: supabase-facilities-api, Property 1: Club config parsing preserves valid entries
+// Feature: goplay-facilities-api, Property 1: Club config parsing preserves valid entries
 test("Property 1: Club config parsing preserves valid entries", () => {
   const nonEmptyAlphanumeric = fc
     .array(fc.constantFrom(..."abcdefghijklmnopqrstuvwxyz0123456789"), {
@@ -11,31 +11,31 @@ test("Property 1: Club config parsing preserves valid entries", () => {
     })
     .map((chars) => chars.join(""));
 
-  const validSupabaseArb = fc
+  const validGoPlayArb = fc
     .record({
       name: nonEmptyAlphanumeric,
       facilityId: nonEmptyAlphanumeric,
     })
     .map(({ name, facilityId }) => ({
-      config: { name, provider: "supabase" as const, facilityId },
+      config: { name, provider: "goplay" as const, facilityId },
       isValid: true as const,
     }));
 
   const invalidArb = fc.oneof(
     nonEmptyAlphanumeric.map((name) => ({
-      config: { name, provider: "supabase" as const },
+      config: { name, provider: "goplay" as const },
       isValid: false as const,
     })),
     nonEmptyAlphanumeric.map((facilityId) => ({
-      config: { provider: "supabase" as const, facilityId },
+      config: { provider: "goplay" as const, facilityId },
       isValid: false as const,
     })),
     nonEmptyAlphanumeric.map((facilityId) => ({
-      config: { name: "", provider: "supabase" as const, facilityId },
+      config: { name: "", provider: "goplay" as const, facilityId },
       isValid: false as const,
     })),
     nonEmptyAlphanumeric.map((name) => ({
-      config: { name, provider: "supabase" as const, facilityId: "" },
+      config: { name, provider: "goplay" as const, facilityId: "" },
       isValid: false as const,
     })),
     nonEmptyAlphanumeric.map((name) => ({
@@ -46,7 +46,7 @@ test("Property 1: Club config parsing preserves valid entries", () => {
 
   const mixedConfigsArb = fc
     .tuple(
-      fc.array(validSupabaseArb, { minLength: 1, maxLength: 4 }),
+      fc.array(validGoPlayArb, { minLength: 1, maxLength: 4 }),
       fc.array(invalidArb, { minLength: 1, maxLength: 4 }),
     )
     .chain(([valids, invalids]) => {
@@ -63,17 +63,17 @@ test("Property 1: Club config parsing preserves valid entries", () => {
       const expectedValidCount = taggedConfigs.filter((t) => t.isValid).length;
       const json = JSON.stringify(configs);
       const result = parseClubConfigs(json);
-      const supabaseResults = result.filter((c) => c.provider === "supabase");
-      expect(supabaseResults.length).toBe(expectedValidCount);
-      expect(supabaseResults.length).toBeGreaterThan(0);
+      const goplayResults = result.filter((c) => c.provider === "goplay");
+      expect(goplayResults.length).toBe(expectedValidCount);
+      expect(goplayResults.length).toBeGreaterThan(0);
     }),
     { numRuns: 100 },
   );
 });
 
-// Feature: supabase-facilities-api, Property 2: Hour range filter retains only in-range slots
+// Feature: goplay-facilities-api, Property 2: Hour range filter retains only in-range slots
 test("Property 2: Hour range filter retains only in-range slots", () => {
-  const { filterSlotsByHourRange } = require("@utils/supabaseSlots.util");
+  const { filterSlotsByHourRange } = require("@utils/goplaySlots.util");
   const { parseHourStringToDecimal } = require("@utils/date.utils");
 
   const timeStringArb = fc
@@ -130,9 +130,9 @@ test("Property 2: Hour range filter retains only in-range slots", () => {
   );
 });
 
-// Feature: supabase-facilities-api, Property 3: Merge ranges produces non-overlapping sorted output
+// Feature: goplay-facilities-api, Property 3: Merge ranges produces non-overlapping sorted output
 test("Property 3: Merge ranges produces non-overlapping sorted output", () => {
-  const { mergeRanges } = require("@utils/supabaseSlots.util");
+  const { mergeRanges } = require("@utils/goplaySlots.util");
 
   const rangeArb = fc
     .record({
@@ -147,17 +147,14 @@ test("Property 3: Merge ranges produces non-overlapping sorted output", () => {
     fc.property(rangesArb, (ranges) => {
       const merged = mergeRanges(ranges);
 
-      // Output should be sorted by start
       for (let i = 1; i < merged.length; i++) {
         expect(merged[i].start).toBeGreaterThan(merged[i - 1].end);
       }
 
-      // Each merged range should be valid
       for (const r of merged) {
         expect(r.end).toBeGreaterThan(r.start);
       }
 
-      // Every input point should be covered by some merged range
       for (const input of ranges) {
         const covered = merged.some(
           (m) => m.start <= input.start && m.end >= input.end,
@@ -169,9 +166,9 @@ test("Property 3: Merge ranges produces non-overlapping sorted output", () => {
   );
 });
 
-// Feature: supabase-facilities-api, Property 4: slotsToTimeRanges respects endHour
+// Feature: goplay-facilities-api, Property 4: slotsToTimeRanges respects endHour
 test("Property 4: slotsToTimeRanges respects endHour", () => {
-  const { slotsToTimeRanges } = require("@utils/supabaseSlots.util");
+  const { slotsToTimeRanges } = require("@utils/goplaySlots.util");
 
   const timeStringArb = fc
     .record({
@@ -205,7 +202,6 @@ test("Property 4: slotsToTimeRanges respects endHour", () => {
     fc.property(slotsArb, endHourArb, (slots, endHour) => {
       const ranges = slotsToTimeRanges(slots, endHour);
 
-      // All ranges must end at or before endHour
       for (const r of ranges) {
         expect(r.end).toBeLessThanOrEqual(endHour + 0.001);
         expect(r.end).toBeGreaterThan(r.start);
@@ -215,11 +211,9 @@ test("Property 4: slotsToTimeRanges respects endHour", () => {
   );
 });
 
-// Feature: supabase-facilities-api, Property 5: Response validation rejects missing slots field
+// Feature: goplay-facilities-api, Property 5: Response validation rejects missing slots field
 test("Property 5: Response validation rejects missing slots field", async () => {
-  const {
-    fetchSupabaseFacilityAvailability,
-  } = require("@utils/supabaseApi.util");
+  const { fetchGoPlayFacilityAvailability } = require("@utils/goplayApi.util");
 
   const invalidResponseArb = fc.oneof(
     fc.record({ data: fc.anything() }),
@@ -246,8 +240,8 @@ test("Property 5: Response validation rejects missing slots field", async () => 
           }) as Response;
 
         await expect(
-          fetchSupabaseFacilityAvailability("test-id", "2025-01-01"),
-        ).rejects.toThrow("Invalid Supabase response: missing slots array");
+          fetchGoPlayFacilityAvailability("test-id", "2025-01-01"),
+        ).rejects.toThrow("Invalid GoPlay response: missing slots array");
       }),
       { numRuns: 100 },
     );
@@ -256,9 +250,9 @@ test("Property 5: Response validation rejects missing slots field", async () => 
   }
 });
 
-// Feature: supabase-facilities-api, Property 6: Slot parsing skips malformed slots
+// Feature: goplay-facilities-api, Property 6: Slot parsing skips malformed slots
 test("Property 6: Slot parsing skips malformed slots", () => {
-  const { filterMalformedSlots } = require("@utils/supabaseSlots.util");
+  const { filterMalformedSlots } = require("@utils/goplaySlots.util");
 
   const timeStringArb = fc
     .record({
@@ -317,13 +311,13 @@ test("Property 6: Slot parsing skips malformed slots", () => {
   );
 });
 
-// Feature: supabase-facilities-api, Property 7: Full pipeline produces valid merged ranges
+// Feature: goplay-facilities-api, Property 7: Full pipeline produces valid merged TimeSlots
 test("Property 7: Full pipeline produces valid merged TimeSlots", () => {
   const {
     filterSlotsByHourRange,
     slotsToTimeRanges,
     mergeRanges,
-  } = require("@utils/supabaseSlots.util");
+  } = require("@utils/goplaySlots.util");
 
   const timeStringArb = fc
     .record({
@@ -365,12 +359,10 @@ test("Property 7: Full pipeline produces valid merged TimeSlots", () => {
         (r: any) => r.end - r.start >= minPlaytimeHours,
       );
 
-      // All qualifying ranges should be >= minPlaytime
       for (const r of qualifying) {
         expect(r.end - r.start).toBeGreaterThanOrEqual(minPlaytimeHours);
       }
 
-      // Ranges should be sorted and non-overlapping
       for (let i = 1; i < qualifying.length; i++) {
         expect(qualifying[i].start).toBeGreaterThan(qualifying[i - 1].end);
       }
