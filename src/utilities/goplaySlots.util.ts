@@ -110,8 +110,8 @@ export function filterSlotsByHourRange(
 
 /**
  * Orchestrator: fetches availability for all dates in parallel,
- * converts slots to ranges, merges them, filters by minPlaytime,
- * and returns TimeSlot[] representing continuous available windows.
+ * merges overlapping ranges from all slots, then filters merged
+ * blocks by minPlaytime.
  */
 export async function getGoPlaySlots(
   facilityId: string,
@@ -132,18 +132,17 @@ export async function getGoPlaySlots(
     // Filter to configured hour range
     const inRange = filterSlotsByHourRange(validSlots, startHour, endHour);
 
-    // Convert each slot to a time range using longest duration per slot
+    // Convert every slot to a time range using longest duration that fits within endHour
     const ranges = slotsToTimeRanges(inRange, endHour);
 
-    // Merge overlapping/adjacent ranges into continuous blocks
+    // Merge overlapping/adjacent ranges
     const merged = mergeRanges(ranges);
 
-    // Filter by minimum playtime (block duration >= minPlaytimeHours)
+    // Only keep merged blocks where total span >= minPlaytime
     const qualifying = merged.filter(
       (r) => r.end - r.start >= minPlaytimeHours,
     );
 
-    // Convert to TimeSlots
     const formattedDate = formatDate(date);
     return qualifying.map((r) => ({
       date: formattedDate,
