@@ -2,6 +2,7 @@ import { formatCourtMessage } from "@src/utilities/general.util";
 import { logScanParameters } from "@src/utilities/logger.utils";
 import { getPlayByPointSlots } from "@src/utilities/playByPointSlots.util";
 import { getMatchPointerSlots } from "@src/utilities/matchPointerSlots.util";
+import { getGoPlaySlots } from "@src/utilities/goplaySlots.util";
 import {
   findNewSlots,
   hasAnySlotBecomeUnavailable,
@@ -30,6 +31,7 @@ export async function checkCourtAvailability(
 
   for (const club of clubs) {
     try {
+      console.log(`\n--- Scanning club: ${club.name} (${club.provider}) ---`);
       const slots = await fetchSlotsForClub(club, dates, params);
       await processClubResults(club, slots, scannedDates, hourRange);
     } catch (err) {
@@ -55,6 +57,14 @@ async function fetchSlotsForClub(
     case "matchpointer":
       return getMatchPointerSlots(
         club.venueId,
+        dates,
+        params.startHour,
+        params.endHour,
+        params.minPlaytimeHours,
+      );
+    case "goplay":
+      return getGoPlaySlots(
+        club.facilityId,
         dates,
         params.startHour,
         params.endHour,
