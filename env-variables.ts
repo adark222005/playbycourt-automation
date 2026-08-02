@@ -33,7 +33,12 @@ const SCAN_MIN_PLAYTIME_HOURS = envVar
   .default("1.5")
   .asFloat();
 
-const CLUBS = envVar.get("CLUBS").required().asString();
+const CLUBS = envVar
+  .get("CLUBS")
+  .required()
+  .asString()
+  .split(",")
+  .map((s) => s.trim());
 const MATCHPOINTER_API_KEY = envVar
   .get("MATCHPOINTER_API_KEY")
   .default("")

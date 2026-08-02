@@ -1,17 +1,75 @@
 import { ClubConfig, MatchPointerClubConfig } from "./types.util";
+import * as fs from "fs";
+import * as path from "path";
 
+const CLUBS_JSON_PATH = path.resolve(__dirname, "../../config/clubs.json");
+
+/**
+ * Loads all club configs from config/clubs.json, validates each entry,
+ * and filters to only the active clubs specified by name.
+ */
+export function loadActiveClubs(activeClubNames: string[]): ClubConfig[] {
+  const allClubs = loadAndValidateClubsFile();
+
+  const activeSet = new Set(
+    activeClubNames.map((n) => n.trim()).filter((n) => n.length > 0),
+  );
+
+  const activeClubs: ClubConfig[] = [];
+  const foundNames = new Set<string>();
+
+  for (const club of allClubs) {
+    if (activeSet.has(club.name)) {
+      activeClubs.push(club);
+      foundNames.add(club.name);
+    }
+  }
+
+  // Warn about names in env that don't exist in the JSON
+  for (const name of activeSet) {
+    if (!foundNames.has(name)) {
+      console.error(
+        `Club "${name}" specified in CLUBS env var not found in config/clubs.json`,
+      );
+    }
+  }
+
+  return activeClubs;
+}
+
+/**
+ * Reads and validates config/clubs.json. Throws on file read or JSON parse errors.
+ * Individual invalid entries are logged and skipped.
+ */
+function loadAndValidateClubsFile(): ClubConfig[] {
+  let raw: string;
+  try {
+    raw = fs.readFileSync(CLUBS_JSON_PATH, "utf-8");
+  } catch (err) {
+    throw new Error(
+      `Failed to read clubs config file at ${CLUBS_JSON_PATH}: ${err instanceof Error ? err.message : String(err)}`,
+    );
+  }
+
+  return parseClubConfigs(raw);
+}
+
+/**
+ * Parses a JSON string into validated ClubConfig[].
+ * Invalid entries are logged and excluded.
+ */
 export function parseClubConfigs(clubsJson: string): ClubConfig[] {
   let parsed: unknown;
   try {
     parsed = JSON.parse(clubsJson);
   } catch (err) {
     throw new Error(
-      `Failed to parse CLUBS JSON: ${err instanceof Error ? err.message : String(err)}`,
+      `Failed to parse clubs JSON: ${err instanceof Error ? err.message : String(err)}`,
     );
   }
 
   if (!Array.isArray(parsed)) {
-    throw new Error(`CLUBS must be a JSON array, got: ${typeof parsed}`);
+    throw new Error(`Clubs config must be a JSON array, got: ${typeof parsed}`);
   }
 
   const validConfigs: ClubConfig[] = [];
