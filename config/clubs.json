@@ -1,0 +1,37 @@
+[
+  {
+    "name": "Ganei Tikva",
+    "provider": "matchpointer",
+    "venueId": "0e37917d-6702-4b19-969c-4e860aa3eeaa"
+  },
+  {
+    "name": "Kfar Hamacabiah",
+    "provider": "goplay",
+    "facilityId": "7ee35a4c-c577-4318-acf5-8347198409e9"
+  },
+  {
+    "name": "padelnet Petah Tikva",
+    "provider": "goplay",
+    "facilityId": "d5fa0b1f-30d4-497b-ae9b-708405392c3b"
+  },
+  {
+    "name": "Tel Aviv University",
+    "provider": "goplay",
+    "facilityId": "e546d25c-1622-4dc4-b565-f5f43f471956"
+  },
+  {
+    "name": "Padel Israel Petah Tikva",
+    "provider": "goplay",
+    "facilityId": "1ceb1bdb-d021-467f-b993-f92b041c5acd"
+  },
+  {
+    "name": "padelnet Ramat Efal",
+    "provider": "goplay",
+    "facilityId": "ee127536-eddf-4992-8f11-f1407144fc40"
+  },
+  {
+    "name": "Country Nave oz",
+    "provider": "goplay",
+    "facilityId": "2c3bd950-98f1-4676-8b6e-001e4bdfadca"
+  }
+]
