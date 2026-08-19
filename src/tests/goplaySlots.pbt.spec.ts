@@ -166,9 +166,9 @@ test("Property 3: Merge ranges produces non-overlapping sorted output", () => {
   );
 });
 
-// Feature: goplay-facilities-api, Property 4: slotsToTimeRanges respects endHour
-test("Property 4: slotsToTimeRanges respects endHour", () => {
-  const { slotsToTimeRanges } = require("@utils/goplaySlots.util");
+// Feature: goplay-facilities-api, Property 4: buildReservationIntervals respects endHour
+test("Property 4: buildReservationIntervals respects endHour", () => {
+  const { buildReservationIntervals } = require("@utils/goplaySlots.util");
 
   const timeStringArb = fc
     .record({
@@ -200,9 +200,9 @@ test("Property 4: slotsToTimeRanges respects endHour", () => {
 
   fc.assert(
     fc.property(slotsArb, endHourArb, (slots, endHour) => {
-      const ranges = slotsToTimeRanges(slots, endHour);
+      const intervals = buildReservationIntervals(slots, endHour);
 
-      for (const r of ranges) {
+      for (const r of intervals) {
         expect(r.end).toBeLessThanOrEqual(endHour + 0.001);
         expect(r.end).toBeGreaterThan(r.start);
       }
@@ -311,12 +311,11 @@ test("Property 6: Slot parsing skips malformed slots", () => {
   );
 });
 
-// Feature: goplay-facilities-api, Property 7: Full pipeline produces valid merged TimeSlots
+// Feature: goplay-facilities-api, Property 7: Full pipeline produces valid qualifying TimeSlots
 test("Property 7: Full pipeline produces valid merged TimeSlots", () => {
   const {
     filterSlotsByHourRange,
-    slotsToTimeRanges,
-    mergeRanges,
+    findQualifyingBlocks,
   } = require("@utils/goplaySlots.util");
 
   const timeStringArb = fc
@@ -353,16 +352,18 @@ test("Property 7: Full pipeline produces valid merged TimeSlots", () => {
       const minPlaytimeHours = 1;
 
       const inRange = filterSlotsByHourRange(slots, startHour, endHour);
-      const ranges = slotsToTimeRanges(inRange, endHour);
-      const merged = mergeRanges(ranges);
-      const qualifying = merged.filter(
-        (r: any) => r.end - r.start >= minPlaytimeHours,
+      const qualifying = findQualifyingBlocks(
+        inRange,
+        endHour,
+        minPlaytimeHours,
       );
 
       for (const r of qualifying) {
         expect(r.end - r.start).toBeGreaterThanOrEqual(minPlaytimeHours);
+        expect(r.end).toBeLessThanOrEqual(endHour + 0.001);
       }
 
+      // Non-overlapping and sorted
       for (let i = 1; i < qualifying.length; i++) {
         expect(qualifying[i].start).toBeGreaterThan(qualifying[i - 1].end);
       }
