@@ -5,38 +5,38 @@ import {
   parseHourStringToDecimal,
 } from "./date.utils";
 import { logWithTimestamp } from "./logger.utils";
-import { GoPlayAvailableSlot, TimeSlot } from "./types.util";
+import { GoPlaySlot, TimeSlot } from "./types.util";
 
 /**
- * Filter out malformed slots missing start_time or available_courts.
+ * Filter out malformed slots missing start_time or duration_options.
  */
 export function filterMalformedSlots(
   slots: unknown[],
   facilityId: string,
-): GoPlayAvailableSlot[] {
+): GoPlaySlot[] {
   return slots.filter((slot: any) => {
     if (
       !slot ||
       typeof slot !== "object" ||
       !slot.start_time ||
-      !Array.isArray(slot.available_courts)
+      !Array.isArray(slot.duration_options)
     ) {
       logWithTimestamp(
-        `Warning: Skipping malformed slot in facility ${facilityId} - missing start_time or available_courts`,
+        `Warning: Skipping malformed slot in facility ${facilityId} - missing start_time or duration_options`,
       );
       return false;
     }
     return true;
-  }) as GoPlayAvailableSlot[];
+  }) as GoPlaySlot[];
 }
 
 /**
  * Build all possible reservation intervals from slots.
- * Each interval represents one bookable reservation: a court at a start time
+ * Each interval represents one bookable reservation: a start time
  * for one of its duration options, clipped to endHour.
  */
 export function buildReservationIntervals(
-  slots: GoPlayAvailableSlot[],
+  slots: GoPlaySlot[],
   endHour: number,
 ): { start: number; end: number }[] {
   const intervals: { start: number; end: number }[] = [];
@@ -44,14 +44,12 @@ export function buildReservationIntervals(
   for (const slot of slots) {
     const start = parseHourStringToDecimal(slot.start_time);
 
-    for (const court of slot.available_courts) {
-      if (!Array.isArray(court.duration_options)) continue;
+    if (!Array.isArray(slot.duration_options)) continue;
 
-      for (const duration of court.duration_options) {
-        const end = start + duration / 60;
-        if (end <= endHour) {
-          intervals.push({ start, end });
-        }
+    for (const duration of slot.duration_options) {
+      const end = start + duration / 60;
+      if (end <= endHour) {
+        intervals.push({ start, end });
       }
     }
   }
@@ -120,7 +118,7 @@ export function computeFarthestReach(
  * if one ends exactly when the next begins (possibly on a different court).
  */
 export function findQualifyingBlocks(
-  slots: GoPlayAvailableSlot[],
+  slots: GoPlaySlot[],
   endHour: number,
   minPlaytimeHours: number,
 ): { start: number; end: number }[] {
@@ -170,13 +168,15 @@ export function mergeRanges(
 
 /**
  * Filter slots whose start_time falls within [startHour, endHour).
+ * Slots with is_next_day are excluded (they represent times beyond midnight).
  */
 export function filterSlotsByHourRange(
-  slots: GoPlayAvailableSlot[],
+  slots: GoPlaySlot[],
   startHour: number,
   endHour: number,
-): GoPlayAvailableSlot[] {
+): GoPlaySlot[] {
   return slots.filter((slot) => {
+    if (slot.is_next_day) return false;
     const decimal = parseHourStringToDecimal(slot.start_time);
     return decimal >= startHour && decimal < endHour;
   });
@@ -195,10 +195,18 @@ export async function getGoPlaySlots(
 ): Promise<TimeSlot[]> {
   const requests = dates.map(async (date) => {
     const dateISO = formatDateISO(date);
-    const response = await fetchGoPlayFacilityAvailability(facilityId, dateISO);
+    const response = await fetchGoPlayFacilityAvailability(
+      [facilityId],
+      dateISO,
+    );
+
+    const facility = response.facilities.find(
+      (f) => f.facility_id === facilityId,
+    );
+    if (!facility) return [];
 
     const validSlots = filterMalformedSlots(
-      response.slots as unknown[],
+      facility.available_slots as unknown[],
       facilityId,
     );
 

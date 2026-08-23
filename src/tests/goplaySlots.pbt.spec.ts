@@ -88,14 +88,7 @@ test("Property 2: Hour range filter retains only in-range slots", () => {
 
   const slotArb = fc.record({
     start_time: timeStringArb,
-    available_courts: fc.constant([
-      {
-        court_id: "c1",
-        court_name: "Court 1",
-        court_position: 1,
-        duration_options: [60],
-      },
-    ]),
+    duration_options: fc.constant([60]),
   });
 
   const slotsArb = fc.array(slotArb, { minLength: 0, maxLength: 10 });
@@ -180,19 +173,12 @@ test("Property 4: buildReservationIntervals respects endHour", () => {
         `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}`,
     );
 
-  const courtArb = fc.record({
-    court_id: fc.constant("c1"),
-    court_name: fc.constant("Court 1"),
-    court_position: fc.constant(1),
+  const slotArb = fc.record({
+    start_time: timeStringArb,
     duration_options: fc.array(fc.constantFrom(60, 90, 120), {
       minLength: 1,
       maxLength: 3,
     }),
-  });
-
-  const slotArb = fc.record({
-    start_time: timeStringArb,
-    available_courts: fc.array(courtArb, { minLength: 1, maxLength: 2 }),
   });
 
   const slotsArb = fc.array(slotArb, { minLength: 1, maxLength: 8 });
@@ -212,13 +198,13 @@ test("Property 4: buildReservationIntervals respects endHour", () => {
 });
 
 // Feature: goplay-facilities-api, Property 5: Response validation rejects missing slots field
-test("Property 5: Response validation rejects missing slots field", async () => {
+test("Property 5: Response validation rejects missing facilities field", async () => {
   const { fetchGoPlayFacilityAvailability } = require("@utils/goplayApi.util");
 
   const invalidResponseArb = fc.oneof(
     fc.record({ data: fc.anything() }),
     fc.record({
-      slots: fc.oneof(
+      facilities: fc.oneof(
         fc.constant(null),
         fc.constant(undefined),
         fc.string(),
@@ -240,8 +226,8 @@ test("Property 5: Response validation rejects missing slots field", async () => 
           }) as Response;
 
         await expect(
-          fetchGoPlayFacilityAvailability("test-id", "2025-01-01"),
-        ).rejects.toThrow("Invalid GoPlay response: missing slots array");
+          fetchGoPlayFacilityAvailability(["test-id"], "2025-01-01"),
+        ).rejects.toThrow("Invalid GoPlay response: missing facilities array");
       }),
       { numRuns: 100 },
     );
@@ -267,19 +253,12 @@ test("Property 6: Slot parsing skips malformed slots", () => {
   const validSlotArb = fc
     .record({
       start_time: timeStringArb,
-      available_courts: fc.constant([
-        {
-          court_id: "c1",
-          court_name: "Court 1",
-          court_position: 1,
-          duration_options: [60],
-        },
-      ]),
+      duration_options: fc.constant([60]),
     })
     .map((slot) => ({ slot, isValid: true as const }));
 
   const malformedSlotArb = fc.oneof(
-    fc.constant({ slot: { available_courts: [] }, isValid: false as const }),
+    fc.constant({ slot: { duration_options: [] }, isValid: false as const }),
     timeStringArb.map((start_time) => ({
       slot: { start_time },
       isValid: false as const,
@@ -328,19 +307,12 @@ test("Property 7: Full pipeline produces valid merged TimeSlots", () => {
         `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}`,
     );
 
-  const courtArb = fc.record({
-    court_id: fc.constant("c1"),
-    court_name: fc.constant("Court 1"),
-    court_position: fc.constant(1),
+  const slotArb = fc.record({
+    start_time: timeStringArb,
     duration_options: fc.array(fc.constantFrom(60, 90, 120), {
       minLength: 1,
       maxLength: 3,
     }),
-  });
-
-  const slotArb = fc.record({
-    start_time: timeStringArb,
-    available_courts: fc.array(courtArb, { minLength: 1, maxLength: 2 }),
   });
 
   const slotsArb = fc.array(slotArb, { minLength: 1, maxLength: 10 });
