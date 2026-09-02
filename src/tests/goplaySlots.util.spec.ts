@@ -3,7 +3,7 @@ import { fetchGoPlayFacilityAvailability } from "@utils/goplayApi.util";
 import { getGoPlaySlots } from "@utils/goplaySlots.util";
 
 const GOPLAY_URL =
-  "https://hhifcmpdogsyijohomxk.supabase.co/functions/v1/get-facility-court-availability";
+  "https://hhifcmpdogsyijohomxk.supabase.co/functions/v1/get-facilities-availability";
 
 test.describe("API request format", () => {
   let originalFetch: typeof globalThis.fetch;
@@ -16,7 +16,7 @@ test.describe("API request format", () => {
     globalThis.fetch = originalFetch;
   });
 
-  test("sends POST to correct URL with proper headers and body", async () => {
+  test("sends POST with facility_ids array and date", async () => {
     let capturedUrl: string | undefined;
     let capturedInit: RequestInit | undefined;
 
@@ -29,16 +29,14 @@ test.describe("API request format", () => {
       return {
         ok: true,
         json: async () => ({
-          facility_id: "facility-123",
-          facility_name: "Test Court",
           date: "2025-03-15",
-          slots: [],
+          facilities: [],
         }),
         text: async () => "",
       } as Response;
     };
 
-    await fetchGoPlayFacilityAvailability("facility-123", "2025-03-15");
+    await fetchGoPlayFacilityAvailability(["facility-123"], "2025-03-15");
 
     expect(capturedUrl).toBe(GOPLAY_URL);
     expect(capturedInit?.method).toBe("POST");
@@ -46,13 +44,26 @@ test.describe("API request format", () => {
       "Content-Type": "application/json",
     });
     expect(JSON.parse(capturedInit?.body as string)).toEqual({
-      facility_id: "facility-123",
+      facility_ids: ["facility-123"],
       date: "2025-03-15",
     });
   });
+
+  test("throws error with status code on failure", async () => {
+    globalThis.fetch = async () =>
+      ({
+        ok: false,
+        status: 400,
+        text: async () => "Bad Request",
+      }) as Response;
+
+    await expect(
+      fetchGoPlayFacilityAvailability(["facility-123"], "2025-03-15"),
+    ).rejects.toThrow(/GoPlay API error 400/);
+  });
 });
 
-test.describe("One request per date behavior", () => {
+test.describe("getGoPlaySlots integration", () => {
   let originalFetch: typeof globalThis.fetch;
 
   test.beforeEach(() => {
@@ -63,7 +74,7 @@ test.describe("One request per date behavior", () => {
     globalThis.fetch = originalFetch;
   });
 
-  test("makes exactly one fetch call per date", async () => {
+  test("makes one fetch call per date", async () => {
     let callCount = 0;
 
     globalThis.fetch = async () => {
@@ -71,10 +82,14 @@ test.describe("One request per date behavior", () => {
       return {
         ok: true,
         json: async () => ({
-          facility_id: "facility-abc",
-          facility_name: "Test",
           date: "2025-03-10",
-          slots: [],
+          facilities: [
+            {
+              facility_id: "facility-abc",
+              facility_name: "Test",
+              available_slots: [],
+            },
+          ],
         }),
         text: async () => "",
       } as Response;
@@ -87,78 +102,21 @@ test.describe("One request per date behavior", () => {
     ];
 
     await getGoPlaySlots("facility-abc", dates, 8, 20, 1);
-
     expect(callCount).toBe(3);
   });
-});
 
-test.describe("HTTP error response handling", () => {
-  let originalFetch: typeof globalThis.fetch;
-
-  test.beforeEach(() => {
-    originalFetch = globalThis.fetch;
-  });
-
-  test.afterEach(() => {
-    globalThis.fetch = originalFetch;
-  });
-
-  test("throws error with status code on 400 response", async () => {
-    globalThis.fetch = async () =>
-      ({
-        ok: false,
-        status: 400,
-        text: async () => "Bad Request",
-      }) as Response;
-
-    await expect(
-      fetchGoPlayFacilityAvailability("facility-123", "2025-03-15"),
-    ).rejects.toThrow(/GoPlay API error 400/);
-  });
-
-  test("throws error with status code on 500 response", async () => {
-    globalThis.fetch = async () =>
-      ({
-        ok: false,
-        status: 500,
-        text: async () => "Internal Server Error",
-      }) as Response;
-
-    await expect(
-      fetchGoPlayFacilityAvailability("facility-123", "2025-03-15"),
-    ).rejects.toThrow(/GoPlay API error 500/);
-  });
-});
-
-test.describe("Empty response / no slots", () => {
-  let originalFetch: typeof globalThis.fetch;
-
-  test.beforeEach(() => {
-    originalFetch = globalThis.fetch;
-  });
-
-  test.afterEach(() => {
-    globalThis.fetch = originalFetch;
-  });
-
-  test("returns empty array when no slots match filters", async () => {
+  test("returns empty when no slots in hour range", async () => {
     globalThis.fetch = async () =>
       ({
         ok: true,
         json: async () => ({
-          facility_id: "my-facility",
-          facility_name: "My Court",
           date: "2025-03-15",
-          slots: [
+          facilities: [
             {
-              start_time: "06:00",
-              available_courts: [
-                {
-                  court_id: "c1",
-                  court_name: "Court 1",
-                  court_position: 1,
-                  duration_options: [60],
-                },
+              facility_id: "my-facility",
+              facility_name: "My Court",
+              available_slots: [
+                { start_time: "06:00", duration_options: [60] },
               ],
             },
           ],
@@ -168,57 +126,23 @@ test.describe("Empty response / no slots", () => {
 
     const dates = [new Date(2025, 2, 15)];
     const result = await getGoPlaySlots("my-facility", dates, 10, 22, 1);
-
     expect(result).toEqual([]);
   });
-});
 
-test.describe("Service-layer integration", () => {
-  let originalFetch: typeof globalThis.fetch;
-
-  test.beforeEach(() => {
-    originalFetch = globalThis.fetch;
-  });
-
-  test.afterEach(() => {
-    globalThis.fetch = originalFetch;
-  });
-
-  test("getGoPlaySlots returns TimeSlot[] with correct shape", async () => {
+  test("returns qualifying TimeSlots with correct shape", async () => {
     globalThis.fetch = async () =>
       ({
         ok: true,
         json: async () => ({
-          facility_id: "goplay-club-1",
-          facility_name: "GoPlay Club",
           date: "2025-03-15",
-          slots: [
+          facilities: [
             {
-              start_time: "10:00",
-              available_courts: [
-                {
-                  court_id: "c1",
-                  court_name: "Court 1",
-                  court_position: 1,
-                  duration_options: [60, 90, 120],
-                },
-              ],
-            },
-            {
-              start_time: "14:30",
-              available_courts: [
-                {
-                  court_id: "c1",
-                  court_name: "Court 1",
-                  court_position: 1,
-                  duration_options: [60],
-                },
-                {
-                  court_id: "c2",
-                  court_name: "Court 2",
-                  court_position: 2,
-                  duration_options: [60, 90],
-                },
+              facility_id: "goplay-club-1",
+              facility_name: "GoPlay Club",
+              available_slots: [
+                { start_time: "10:00", duration_options: [60, 90, 120] },
+                { start_time: "11:00", duration_options: [60, 90] },
+                { start_time: "14:30", duration_options: [60] },
               ],
             },
           ],

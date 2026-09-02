@@ -5,68 +5,140 @@ import {
   parseHourStringToDecimal,
 } from "./date.utils";
 import { logWithTimestamp } from "./logger.utils";
-import { GoPlayAvailableSlot, TimeSlot } from "./types.util";
+import { GoPlaySlot, TimeSlot } from "./types.util";
 
 /**
- * Filter out malformed slots missing start_time or available_courts.
+ * Filter out malformed slots missing start_time or duration_options.
  */
 export function filterMalformedSlots(
   slots: unknown[],
   facilityId: string,
-): GoPlayAvailableSlot[] {
+): GoPlaySlot[] {
   return slots.filter((slot: any) => {
     if (
       !slot ||
       typeof slot !== "object" ||
       !slot.start_time ||
-      !Array.isArray(slot.available_courts)
+      !Array.isArray(slot.duration_options)
     ) {
       logWithTimestamp(
-        `Warning: Skipping malformed slot in facility ${facilityId} - missing start_time or available_courts`,
+        `Warning: Skipping malformed slot in facility ${facilityId} - missing start_time or duration_options`,
       );
       return false;
     }
     return true;
-  }) as GoPlayAvailableSlot[];
+  }) as GoPlaySlot[];
 }
 
 /**
- * Get all duration options across all courts for a slot (deduplicated).
+ * Build all possible reservation intervals from slots.
+ * Each interval represents one bookable reservation: a start time
+ * for one of its duration options, clipped to endHour.
  */
-export function getSlotDurationOptions(slot: GoPlayAvailableSlot): number[] {
-  const allDurations = new Set<number>();
-  for (const court of slot.available_courts) {
-    if (Array.isArray(court.duration_options)) {
-      for (const d of court.duration_options) {
-        allDurations.add(d);
-      }
-    }
-  }
-  return [...allDurations];
-}
-
-/**
- * Convert each slot to a time range {start, end} using the longest duration
- * across all courts, clipped to endHour.
- */
-export function slotsToTimeRanges(
-  slots: GoPlayAvailableSlot[],
+export function buildReservationIntervals(
+  slots: GoPlaySlot[],
   endHour: number,
 ): { start: number; end: number }[] {
-  const ranges: { start: number; end: number }[] = [];
+  const intervals: { start: number; end: number }[] = [];
 
   for (const slot of slots) {
     const start = parseHourStringToDecimal(slot.start_time);
-    const durations = getSlotDurationOptions(slot);
-    const validDurations = durations.filter((d) => start + d / 60 <= endHour);
 
-    if (validDurations.length === 0) continue;
+    if (!Array.isArray(slot.duration_options)) continue;
 
-    const longest = Math.max(...validDurations);
-    ranges.push({ start, end: start + longest / 60 });
+    for (const duration of slot.duration_options) {
+      const end = start + duration / 60;
+      if (end <= endHour) {
+        intervals.push({ start, end });
+      }
+    }
   }
 
-  return ranges;
+  return intervals;
+}
+
+/**
+ * Build a reachability map from intervals.
+ * Key = start time, Value = set of end times reachable with one reservation.
+ */
+export function buildReachabilityMap(
+  intervals: { start: number; end: number }[],
+): Map<number, Set<number>> {
+  const reachableEnds = new Map<number, Set<number>>();
+
+  for (const { start, end } of intervals) {
+    const ends = reachableEnds.get(start) ?? new Set<number>();
+    ends.add(end);
+    reachableEnds.set(start, ends);
+  }
+
+  return reachableEnds;
+}
+
+/**
+ * Compute the farthest reachable time from each start point by chaining
+ * back-to-back reservations. Uses memoization.
+ */
+export function computeFarthestReach(
+  reachableEnds: Map<number, Set<number>>,
+): Map<number, number> {
+  const farthestFrom = new Map<number, number>();
+
+  function getFarthest(time: number): number {
+    if (farthestFrom.has(time)) return farthestFrom.get(time)!;
+
+    const ends = reachableEnds.get(time);
+    if (!ends) {
+      farthestFrom.set(time, time);
+      return time;
+    }
+
+    let best = time;
+    for (const end of ends) {
+      const chainedEnd = getFarthest(end);
+      if (chainedEnd > best) best = chainedEnd;
+    }
+    farthestFrom.set(time, best);
+    return best;
+  }
+
+  for (const start of reachableEnds.keys()) {
+    getFarthest(start);
+  }
+
+  return farthestFrom;
+}
+
+/**
+ * Find qualifying time blocks where the user can play >= minPlaytimeHours
+ * by chaining reservations across courts.
+ *
+ * A reservation is a single booking on one court starting at a slot's start_time
+ * and lasting for one of that court's duration_options. Two reservations chain
+ * if one ends exactly when the next begins (possibly on a different court).
+ */
+export function findQualifyingBlocks(
+  slots: GoPlaySlot[],
+  endHour: number,
+  minPlaytimeHours: number,
+): { start: number; end: number }[] {
+  const intervals = buildReservationIntervals(slots, endHour);
+  if (intervals.length === 0) return [];
+
+  const reachableEnds = buildReachabilityMap(intervals);
+  const farthestFrom = computeFarthestReach(reachableEnds);
+
+  const startPoints = [...reachableEnds.keys()].sort((a, b) => a - b);
+  const qualifying: { start: number; end: number }[] = [];
+
+  for (const start of startPoints) {
+    const farthest = farthestFrom.get(start) ?? start;
+    if (farthest - start >= minPlaytimeHours) {
+      qualifying.push({ start, end: farthest });
+    }
+  }
+
+  return mergeRanges(qualifying);
 }
 
 /**
@@ -96,13 +168,15 @@ export function mergeRanges(
 
 /**
  * Filter slots whose start_time falls within [startHour, endHour).
+ * Slots with is_next_day are excluded (they represent times beyond midnight).
  */
 export function filterSlotsByHourRange(
-  slots: GoPlayAvailableSlot[],
+  slots: GoPlaySlot[],
   startHour: number,
   endHour: number,
-): GoPlayAvailableSlot[] {
+): GoPlaySlot[] {
   return slots.filter((slot) => {
+    if (slot.is_next_day) return false;
     const decimal = parseHourStringToDecimal(slot.start_time);
     return decimal >= startHour && decimal < endHour;
   });
@@ -110,8 +184,7 @@ export function filterSlotsByHourRange(
 
 /**
  * Orchestrator: fetches availability for all dates in parallel,
- * merges overlapping ranges from all slots, then filters merged
- * blocks by minPlaytime.
+ * finds qualifying blocks by chaining reservations, returns TimeSlots.
  */
 export async function getGoPlaySlots(
   facilityId: string,
@@ -122,26 +195,26 @@ export async function getGoPlaySlots(
 ): Promise<TimeSlot[]> {
   const requests = dates.map(async (date) => {
     const dateISO = formatDateISO(date);
-    const response = await fetchGoPlayFacilityAvailability(facilityId, dateISO);
+    const response = await fetchGoPlayFacilityAvailability(
+      [facilityId],
+      dateISO,
+    );
+
+    const facility = response.facilities.find(
+      (f) => f.facility_id === facilityId,
+    );
+    if (!facility) return [];
 
     const validSlots = filterMalformedSlots(
-      response.slots as unknown[],
+      facility.available_slots as unknown[],
       facilityId,
     );
 
     // Filter to configured hour range
     const inRange = filterSlotsByHourRange(validSlots, startHour, endHour);
 
-    // Convert every slot to a time range using longest duration that fits within endHour
-    const ranges = slotsToTimeRanges(inRange, endHour);
-
-    // Merge overlapping/adjacent ranges
-    const merged = mergeRanges(ranges);
-
-    // Only keep merged blocks where total span >= minPlaytime
-    const qualifying = merged.filter(
-      (r) => r.end - r.start >= minPlaytimeHours,
-    );
+    // Find blocks where chained reservations cover >= minPlaytime
+    const qualifying = findQualifyingBlocks(inRange, endHour, minPlaytimeHours);
 
     const formattedDate = formatDate(date);
     return qualifying.map((r) => ({

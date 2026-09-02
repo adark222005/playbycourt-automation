@@ -1,18 +1,18 @@
-import { GoPlayFacilityResponse } from "./types.util";
+import { GoPlayAvailabilityResponse } from "./types.util";
 
 const GOPLAY_API_URL =
-  "https://hhifcmpdogsyijohomxk.supabase.co/functions/v1/get-facility-court-availability";
+  "https://hhifcmpdogsyijohomxk.supabase.co/functions/v1/get-facilities-availability";
 
 export async function fetchGoPlayFacilityAvailability(
-  facilityId: string,
+  facilityIds: string[],
   date: string,
-): Promise<GoPlayFacilityResponse> {
+): Promise<GoPlayAvailabilityResponse> {
   const res = await fetch(GOPLAY_API_URL, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({ facility_id: facilityId, date }),
+    body: JSON.stringify({ facility_ids: facilityIds, date }),
   });
 
   if (!res.ok) {
@@ -22,9 +22,9 @@ export async function fetchGoPlayFacilityAvailability(
 
   const json = await res.json();
 
-  if (!json || !Array.isArray(json.slots)) {
-    throw new Error("Invalid GoPlay response: missing slots array");
+  if (!json || !Array.isArray(json.facilities)) {
+    throw new Error("Invalid GoPlay response: missing facilities array");
   }
 
-  return json as GoPlayFacilityResponse;
+  return json as GoPlayAvailabilityResponse;
 }

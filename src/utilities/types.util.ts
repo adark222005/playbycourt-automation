@@ -27,23 +27,22 @@ export type ClubConfig =
 
 // GoPlay API response types
 
-export interface GoPlayCourtAvailability {
-  court_id: string;
-  court_name: string;
-  court_position: number;
-  duration_options: number[]; // minutes, e.g. [60, 90, 120]
-}
-
-export interface GoPlayAvailableSlot {
+export interface GoPlaySlot {
   start_time: string; // "HH:MM" format
-  available_courts: GoPlayCourtAvailability[];
+  duration_options: number[]; // minutes, e.g. [60, 90, 120]
+  is_next_day?: boolean;
 }
 
-export interface GoPlayFacilityResponse {
+export interface GoPlayFacilityAvailability {
   facility_id: string;
   facility_name: string;
+  available_slots: GoPlaySlot[];
+  lowest_price_ils?: number;
+}
+
+export interface GoPlayAvailabilityResponse {
   date: string;
-  slots: GoPlayAvailableSlot[];
+  facilities: GoPlayFacilityAvailability[];
 }
 
 // MatchPointer API data structures
