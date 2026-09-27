@@ -11,6 +11,7 @@ import {
   smartParseDate,
 } from "./date.utils";
 import { TELEGRAM_CHAT_ID } from "env-variables";
+import { logWithTimestamp } from "./logger.utils";
 
 function getHistoryFilePath(): string {
   return path.resolve(
@@ -27,14 +28,25 @@ function slotKey(row: TimeSlot): string {
 
 export function loadSlotHistory(worksheetName?: string): SlotHistoryRecord[] {
   const filePath = getHistoryFilePath();
-  if (!fs.existsSync(filePath)) return [];
+  if (!fs.existsSync(filePath)) {
+    logWithTimestamp(
+      `History file not found at "${filePath}" — treating as empty history. ` +
+        `If this happens on every CI run, the file isn't being persisted between runs.`,
+    );
+    return [];
+  }
 
   const targetSheet = worksheetName || sheetName;
   const workbook: XLSX.WorkBook = XLSX.readFile(filePath);
   const sheet: XLSX.WorkSheet = workbook.Sheets[targetSheet];
 
   // If the requested sheet doesn't exist, return empty (first time for this club)
-  if (!sheet) return [];
+  if (!sheet) {
+    logWithTimestamp(
+      `Worksheet "${targetSheet}" not found in "${filePath}" (available sheets: ${workbook.SheetNames.join(", ")}) — treating as empty history.`,
+    );
+    return [];
+  }
 
   const flatRows: Record<string, any>[] = XLSX.utils.sheet_to_json(sheet);
 
@@ -283,6 +295,10 @@ export async function acquireFileLock(
         const lockAge = Date.now() - stat.mtimeMs;
         if (lockAge > staleLockMs) {
           // Stale lock detected, remove and retry
+          logWithTimestamp(
+            `Stale lock detected at "${lockPath}" (age ${lockAge}ms > ${staleLockMs}ms). Removing and retrying. ` +
+              `This may indicate a previous run crashed without releasing the lock.`,
+          );
           fs.unlinkSync(lockPath);
           continue;
         }

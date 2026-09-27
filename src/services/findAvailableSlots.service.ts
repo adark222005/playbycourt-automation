@@ -1,5 +1,8 @@
 import { formatCourtMessage } from "@src/utilities/general.util";
-import { logScanParameters } from "@src/utilities/logger.utils";
+import {
+  logScanParameters,
+  logWithTimestamp,
+} from "@src/utilities/logger.utils";
 import { getPlayByPointSlots } from "@src/utilities/playByPointSlots.util";
 import { getMatchPointerSlots } from "@src/utilities/matchPointerSlots.util";
 import { getGoPlaySlots } from "@src/utilities/goplaySlots.util";
@@ -28,11 +31,18 @@ export async function checkCourtAvailability(
   const dates = resolveScanDates(params);
   const scannedDates: Set<string> = new Set(dates.map(formatDate));
   const hourRange = { startHour: params.startHour, endHour: params.endHour };
+  logWithTimestamp(
+    `Scanning ${scannedDates.size} date(s) [${[...scannedDates].join(", ")}] ` +
+      `within hour range ${hourRange.startHour}-${hourRange.endHour}`,
+  );
 
   for (const club of clubs) {
     try {
       console.log(`\n--- Scanning club: ${club.name} (${club.provider}) ---`);
       const slots = await fetchSlotsForClub(club, dates, params);
+      logWithTimestamp(
+        `[${club.name}] Raw API returned ${slots.length} slot(s): ${JSON.stringify(slots)}`,
+      );
       await processClubResults(club, slots, scannedDates, hourRange);
     } catch (err) {
       console.error(`Error scanning club "${club.name}":`, err);
@@ -81,6 +91,10 @@ async function processClubResults(
 ): Promise<void> {
   await withSlotHistoryLock(async () => {
     const fullSlotsHistory: SlotHistoryRecord[] = loadSlotHistory(club.name);
+    logWithTimestamp(
+      `[${club.name}] Loaded ${fullSlotsHistory.length} history record(s) ` +
+        `(${fullSlotsHistory.filter((r) => !r.becameUnavailableAt).length} currently active)`,
+    );
 
     const newSlots: TimeSlot[] = findNewSlots(
       availableTimeSlots,
@@ -91,10 +105,18 @@ async function processClubResults(
       (slot) => !newSlots.includes(slot),
     );
 
+    logWithTimestamp(
+      `[${club.name}] Comparison result: ${newSlots.length} new, ${knownSlots.length} already known. ` +
+        `New: ${JSON.stringify(newSlots)}`,
+    );
+
     const message = formatCourtMessage(club.name, newSlots, knownSlots);
     console.log(message);
 
     if (newSlots.length > 0) {
+      logWithTimestamp(
+        `[${club.name}] Sending Telegram notification for ${newSlots.length} new slot(s).`,
+      );
       await sendTelegramMessage(message);
       updateSlotHistoryExcel(
         availableTimeSlots,
