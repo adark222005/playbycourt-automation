@@ -42,6 +42,7 @@ test.describe("API request format", () => {
     expect(capturedInit?.method).toBe("POST");
     expect(capturedInit?.headers).toEqual({
       "Content-Type": "application/json",
+      "User-Agent": "goplay-slot-scanner/1.0",
     });
     expect(JSON.parse(capturedInit?.body as string)).toEqual({
       facility_ids: ["facility-123"],

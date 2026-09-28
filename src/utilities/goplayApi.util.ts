@@ -11,6 +11,7 @@ export async function fetchGoPlayFacilityAvailability(
     method: "POST",
     headers: {
       "Content-Type": "application/json",
+      "User-Agent": "goplay-slot-scanner/1.0",
     },
     body: JSON.stringify({ facility_ids: facilityIds, date }),
   });

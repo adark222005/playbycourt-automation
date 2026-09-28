@@ -200,6 +200,10 @@ export async function getGoPlaySlots(
       dateISO,
     );
 
+    logWithTimestamp(
+      `[${facilityId}] Raw GoPlay response for ${dateISO}: ${JSON.stringify(response)}`,
+    );
+
     const facility = response.facilities.find(
       (f) => f.facility_id === facilityId,
     );
