@@ -70,6 +70,13 @@ jobs:
           key: court-slot-history-${{ inputs.telegram_chat_id || secrets.TELEGRAM_CHAT_ID }}-${{ github.run_id }}
           restore-keys: court-slot-history-${{ inputs.telegram_chat_id || secrets.TELEGRAM_CHAT_ID }}-
 
+      - name: Restore GoPlay refresh token from cache
+        uses: actions/cache/restore@v4
+        with:
+          path: data/goplay_refresh_token
+          key: goplay-refresh-token-${{ github.run_id }}
+          restore-keys: goplay-refresh-token-
+
       - name: Install dependencies
         run: npm install
 
@@ -97,6 +104,7 @@ jobs:
           TELEGRAM_CHAT_ID: ${{ inputs.telegram_chat_id || secrets.TELEGRAM_CHAT_ID }}
           COOKIE: ${{ secrets.COOKIE }}
           MATCHPOINTER_API_KEY: ${{ secrets.MATCHPOINTER_API_KEY }}
+          GOPLAY_API_KEY: ${{ secrets.GOPLAY_API_KEY }}
           SCAN_START_DATE_OFFSET: ${{ inputs.start_date_offset }}
           SCAN_END_DATE_OFFSET: ${{ inputs.end_date_offset }}
           SCAN_START_HOUR: ${{ inputs.start_hour }}
@@ -106,6 +114,13 @@ jobs:
           SCAN_SPECIFIC_DATES: ${{ inputs.specific_dates }}
           SCAN_MIN_PLAYTIME_HOURS: ${{ inputs.min_playtime_hours }}
         run: npx tsx src/jobs/findAvailableSlots.job.ts
+
+      - name: Save rotated GoPlay refresh token to cache
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: data/goplay_refresh_token
+          key: goplay-refresh-token-${{ github.run_id }}
 
       - name: Save updated slot_history.xlsx to cache
         uses: actions/cache/save@v4
