@@ -9,7 +9,7 @@ const GOPLAY_API_URL =
 const TOKEN_URL =
   "https://hhifcmpdogsyijohomxk.supabase.co/auth/v1/token?grant_type=refresh_token";
 // Seed refresh token — used only on first run before a rotated token is persisted.
-const SEED_REFRESH_TOKEN = "xqgdcsyimrjg";
+const SEED_REFRESH_TOKEN = "w2dqorxxs5xh";
 const REFRESH_TOKEN_FILE = path.resolve(
   __dirname,
   "../../data/goplay_refresh_token",
