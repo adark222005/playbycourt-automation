@@ -43,10 +43,12 @@ const MATCHPOINTER_API_KEY = envVar
   .get("MATCHPOINTER_API_KEY")
   .default("")
   .asString();
+const GOPLAY_API_KEY = envVar.get("GOPLAY_API_KEY").required().asString();
 
 export {
   CLUBS,
   MATCHPOINTER_API_KEY,
+  GOPLAY_API_KEY,
   TELEGRAM_BOT_TOKEN,
   TELEGRAM_CHAT_ID,
   COOKIE,
