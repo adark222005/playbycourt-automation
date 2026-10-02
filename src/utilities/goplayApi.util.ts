@@ -9,7 +9,7 @@ const GOPLAY_API_URL =
 const TOKEN_URL =
   "https://hhifcmpdogsyijohomxk.supabase.co/auth/v1/token?grant_type=refresh_token";
 // Seed refresh token — used only on first run before a rotated token is persisted.
-const SEED_REFRESH_TOKEN = "w2dqorxxs5xh";
+const SEED_REFRESH_TOKEN = "atkxpmitukfe";
 const REFRESH_TOKEN_FILE = path.resolve(
   __dirname,
   "../../data/goplay_refresh_token",
@@ -17,6 +17,7 @@ const REFRESH_TOKEN_FILE = path.resolve(
 
 let cachedToken: string | null = null;
 let tokenExpiresAt: number | null = null;
+let tokenRefreshPromise: Promise<string> | null = null;
 
 /**
  * Supabase rotates refresh tokens: each successful token request invalidates
@@ -48,6 +49,18 @@ async function getToken(): Promise<string> {
     return cachedToken;
   }
 
+  if (!tokenRefreshPromise) {
+    tokenRefreshPromise = refreshToken();
+  }
+
+  try {
+    return await tokenRefreshPromise;
+  } finally {
+    tokenRefreshPromise = null;
+  }
+}
+
+async function refreshToken(): Promise<string> {
   const refreshToken = readStoredRefreshToken();
 
   const tokenRes = await fetch(TOKEN_URL, {
