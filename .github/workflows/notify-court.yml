@@ -74,8 +74,8 @@ jobs:
         uses: actions/cache/restore@v4
         with:
           path: data/goplay_refresh_token
-          key: goplay-refresh-token-v2-${{ github.run_id }}
-          restore-keys: goplay-refresh-token-v2-
+          key: goplay-refresh-token-${{ github.run_id }}
+          restore-keys: goplay-refresh-token-
 
       - name: Install dependencies
         run: npm install
@@ -105,6 +105,7 @@ jobs:
           COOKIE: ${{ secrets.COOKIE }}
           MATCHPOINTER_API_KEY: ${{ secrets.MATCHPOINTER_API_KEY }}
           GOPLAY_API_KEY: ${{ secrets.GOPLAY_API_KEY }}
+          GOPLAY_SEED_REFRESH_TOKEN: ${{ secrets.GOPLAY_SEED_REFRESH_TOKEN }}
           SCAN_START_DATE_OFFSET: ${{ inputs.start_date_offset }}
           SCAN_END_DATE_OFFSET: ${{ inputs.end_date_offset }}
           SCAN_START_HOUR: ${{ inputs.start_hour }}
@@ -116,11 +117,11 @@ jobs:
         run: npx tsx src/jobs/findAvailableSlots.job.ts
 
       - name: Save rotated GoPlay refresh token to cache
-        if: always()
+        if: success()
         uses: actions/cache/save@v4
         with:
           path: data/goplay_refresh_token
-          key: goplay-refresh-token-v2-${{ github.run_id }}
+          key: goplay-refresh-token-${{ github.run_id }}
 
       - name: Save updated slot_history.xlsx to cache
         uses: actions/cache/save@v4

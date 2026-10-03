@@ -109,23 +109,13 @@ async function main() {
   console.log("\nRefresh token value:");
   console.log(`   ${refreshToken}`);
   console.log("\n──────────────────────────────────────────────");
-  console.log("NEXT STEPS to revive the GitHub Actions chain:");
+  console.log("NEXT STEP to revive the GitHub Actions chain:");
   console.log("──────────────────────────────────────────────");
   console.log(
-    `1. Paste this token into SEED_REFRESH_TOKEN in\n` +
-      `   src/utilities/goplayApi.util.ts :\n` +
-      `   const SEED_REFRESH_TOKEN = "${refreshToken}";`,
-  );
-  console.log(
-    `\n2. If the dead token cache still matches the current key, bump the token\n` +
-      `   cache key version in .github/workflows/notify-court.yml (both the "key"\n` +
-      `   and "restore-keys" lines), e.g. goplay-refresh-token-v2- -> ...-v3-.\n` +
-      `   This orphans the dead cache WITHOUT deleting your slot-history cache.`,
-  );
-  console.log(
-    `\n3. Commit + push both files, then trigger the notify-court workflow once.\n` +
-      `   With no matching cache, it falls back to the fresh seed, logs in,\n` +
-      `   rotates the token, and saves a new cache. Chain is alive again.`,
+    `Update the GitHub repo secret GOPLAY_SEED_REFRESH_TOKEN with this value:\n` +
+      `   ${refreshToken}\n\n` +
+      `No commit needed. On the next run, if the cached token is dead the job\n` +
+      `falls back to this seed, logs in, rotates, and saves a fresh cache.`,
   );
   console.log("──────────────────────────────────────────────\n");
 }
