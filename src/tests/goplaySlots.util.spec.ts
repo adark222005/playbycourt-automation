@@ -4,6 +4,8 @@ import { getGoPlaySlots } from "@utils/goplaySlots.util";
 
 const GOPLAY_URL =
   "https://hhifcmpdogsyijohomxk.supabase.co/functions/v1/get-facilities-availability";
+const TOKEN_URL =
+  "https://hhifcmpdogsyijohomxk.supabase.co/auth/v1/token?grant_type=refresh_token";
 
 test.describe("API request format", () => {
   let originalFetch: typeof globalThis.fetch;
@@ -14,6 +16,41 @@ test.describe("API request format", () => {
 
   test.afterEach(() => {
     globalThis.fetch = originalFetch;
+  });
+
+  test("shares one token refresh across concurrent requests", async () => {
+    let tokenRequestCount = 0;
+    let availabilityRequestCount = 0;
+
+    globalThis.fetch = async (input: string | URL | Request) => {
+      if (input === TOKEN_URL) {
+        tokenRequestCount++;
+        return {
+          ok: true,
+          json: async () => ({ access_token: "test-access-token" }),
+          text: async () => "",
+        } as Response;
+      }
+
+      availabilityRequestCount++;
+      return {
+        ok: true,
+        json: async () => ({ facilities: [] }),
+        text: async () => "",
+      } as Response;
+    };
+
+    await Promise.all(
+      Array.from({ length: 5 }, (_, index) =>
+        fetchGoPlayFacilityAvailability(
+          ["facility-123"],
+          `2025-03-${String(index + 1).padStart(2, "0")}`,
+        ),
+      ),
+    );
+
+    expect(tokenRequestCount).toBe(1);
+    expect(availabilityRequestCount).toBe(5);
   });
 
   test("sends POST with facility_ids array and date", async () => {
