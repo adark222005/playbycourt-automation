@@ -2,6 +2,13 @@ import fs from "fs";
 import path from "path";
 import { GOPLAY_API_KEY } from "env-variables";
 import { GoPlayAvailabilityResponse } from "./types.util";
+import { sendTelegramMessage } from "./telegramSender.util";
+
+// Unique-ish id for this process so overlapping CI runs are distinguishable
+// in the Telegram alerts.
+const PROCESS_TAG = `${Date.now().toString(36)}-${Math.floor(
+  Math.random() * 1e4,
+)}`;
 
 const GOPLAY_API_URL =
   "https://hhifcmpdogsyijohomxk.supabase.co/functions/v1/get-facilities-availability";
@@ -9,7 +16,7 @@ const GOPLAY_API_URL =
 const TOKEN_URL =
   "https://hhifcmpdogsyijohomxk.supabase.co/auth/v1/token?grant_type=refresh_token";
 // Seed refresh token — used only on first run before a rotated token is persisted.
-const SEED_REFRESH_TOKEN = "atkxpmitukfe";
+const SEED_REFRESH_TOKEN = "24cjk4nct7nk";
 const REFRESH_TOKEN_FILE = path.resolve(
   __dirname,
   "../../data/goplay_refresh_token",
@@ -25,13 +32,19 @@ let tokenRefreshPromise: Promise<string> | null = null;
  * token to disk so subsequent process runs (e.g. cron) use the valid one
  * instead of the already-consumed seed token.
  */
+let lastTokenSource: "file" | "seed" = "seed";
+
 function readStoredRefreshToken(): string {
   try {
     const stored = fs.readFileSync(REFRESH_TOKEN_FILE, "utf8").trim();
-    if (stored) return stored;
+    if (stored) {
+      lastTokenSource = "file";
+      return stored;
+    }
   } catch (err: any) {
     if (err.code !== "ENOENT") throw err;
   }
+  lastTokenSource = "seed";
   return SEED_REFRESH_TOKEN;
 }
 
@@ -74,6 +87,19 @@ async function refreshToken(): Promise<string> {
 
   if (!tokenRes.ok) {
     const body = await tokenRes.text();
+
+    // Diagnostic alert so token failures can be traced in real time.
+    // Sends the FULL refresh token (private chat) so overlapping runs reusing
+    // the same single-use token can be correlated across separate messages.
+    const alert =
+      `🔴 GoPlay token refresh FAILED\n` +
+      `run: ${PROCESS_TAG}\n` +
+      `status: ${tokenRes.status}\n` +
+      `source: ${lastTokenSource}\n` +
+      `refresh_token: ${refreshToken}\n` +
+      `body: ${body.slice(0, 300)}`;
+    await sendTelegramMessage(alert);
+
     throw new Error(`Failed to get GoPlay token: ${tokenRes.status} ${body}`);
   }
 

@@ -74,8 +74,8 @@ jobs:
         uses: actions/cache/restore@v4
         with:
           path: data/goplay_refresh_token
-          key: goplay-refresh-token-${{ github.run_id }}
-          restore-keys: goplay-refresh-token-
+          key: goplay-refresh-token-v2-${{ github.run_id }}
+          restore-keys: goplay-refresh-token-v2-
 
       - name: Install dependencies
         run: npm install
@@ -120,7 +120,7 @@ jobs:
         uses: actions/cache/save@v4
         with:
           path: data/goplay_refresh_token
-          key: goplay-refresh-token-${{ github.run_id }}
+          key: goplay-refresh-token-v2-${{ github.run_id }}
 
       - name: Save updated slot_history.xlsx to cache
         uses: actions/cache/save@v4
