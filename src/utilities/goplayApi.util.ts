@@ -1,11 +1,9 @@
 import fs from "fs";
 import path from "path";
-import { GOPLAY_API_KEY } from "env-variables";
+import { GOPLAY_API_KEY, GOPLAY_SEED_REFRESH_TOKEN } from "env-variables";
 import { GoPlayAvailabilityResponse } from "./types.util";
 import { sendTelegramMessage } from "./telegramSender.util";
 
-// Unique-ish id for this process so overlapping CI runs are distinguishable
-// in the Telegram alerts.
 const PROCESS_TAG = `${Date.now().toString(36)}-${Math.floor(
   Math.random() * 1e4,
 )}`;
@@ -15,8 +13,6 @@ const GOPLAY_API_URL =
 
 const TOKEN_URL =
   "https://hhifcmpdogsyijohomxk.supabase.co/auth/v1/token?grant_type=refresh_token";
-// Seed refresh token — used only on first run before a rotated token is persisted.
-const SEED_REFRESH_TOKEN = "24cjk4nct7nk";
 const REFRESH_TOKEN_FILE = path.resolve(
   __dirname,
   "../../data/goplay_refresh_token",
@@ -26,26 +22,14 @@ let cachedToken: string | null = null;
 let tokenExpiresAt: number | null = null;
 let tokenRefreshPromise: Promise<string> | null = null;
 
-/**
- * Supabase rotates refresh tokens: each successful token request invalidates
- * the refresh token used and returns a new one. We persist the latest refresh
- * token to disk so subsequent process runs (e.g. cron) use the valid one
- * instead of the already-consumed seed token.
- */
-let lastTokenSource: "file" | "seed" = "seed";
-
-function readStoredRefreshToken(): string {
+function readStoredFileToken(): string | null {
   try {
     const stored = fs.readFileSync(REFRESH_TOKEN_FILE, "utf8").trim();
-    if (stored) {
-      lastTokenSource = "file";
-      return stored;
-    }
+    if (stored) return stored;
   } catch (err: any) {
     if (err.code !== "ENOENT") throw err;
   }
-  lastTokenSource = "seed";
-  return SEED_REFRESH_TOKEN;
+  return null;
 }
 
 function storeRefreshToken(token: string): void {
@@ -73,9 +57,9 @@ async function getToken(): Promise<string> {
   }
 }
 
-async function refreshToken(): Promise<string> {
-  const refreshToken = readStoredRefreshToken();
-
+async function attemptRefresh(
+  refreshToken: string,
+): Promise<{ ok: true; accessToken: string } | { ok: false; status: number; body: string }> {
   const tokenRes = await fetch(TOKEN_URL, {
     method: "POST",
     headers: {
@@ -86,43 +70,75 @@ async function refreshToken(): Promise<string> {
   });
 
   if (!tokenRes.ok) {
-    const body = await tokenRes.text();
-
-    // Diagnostic alert so token failures can be traced in real time.
-    // Sends the FULL refresh token (private chat) so overlapping runs reusing
-    // the same single-use token can be correlated across separate messages.
-    const alert =
-      `🔴 GoPlay token refresh FAILED\n` +
-      `run: ${PROCESS_TAG}\n` +
-      `status: ${tokenRes.status}\n` +
-      `source: ${lastTokenSource}\n` +
-      `refresh_token: ${refreshToken}\n` +
-      `body: ${body.slice(0, 300)}`;
-    await sendTelegramMessage(alert);
-
-    throw new Error(`Failed to get GoPlay token: ${tokenRes.status} ${body}`);
+    return { ok: false, status: tokenRes.status, body: await tokenRes.text() };
   }
 
   const tokenData = await tokenRes.json();
-
   if (!tokenData.access_token) {
     throw new Error("Invalid token response: missing access_token");
   }
 
-  // Persist the rotated refresh token so the next run can authenticate.
   if (tokenData.refresh_token) {
     storeRefreshToken(tokenData.refresh_token as string);
   }
 
   const accessToken = tokenData.access_token as string;
   cachedToken = accessToken;
-  // Token expires in 3600 seconds by default, set expiry to slightly before
   const expiresIn = tokenData.expires_in
     ? tokenData.expires_in * 1000
     : 3600000;
   tokenExpiresAt = Date.now() + expiresIn;
 
-  return accessToken;
+  return { ok: true, accessToken };
+}
+
+async function refreshToken(): Promise<string> {
+  const fileToken = readStoredFileToken();
+  const seedToken = GOPLAY_SEED_REFRESH_TOKEN;
+
+  if (fileToken) {
+    const result = await attemptRefresh(fileToken);
+    if (result.ok) return result.accessToken;
+
+    if (seedToken && seedToken !== fileToken) {
+      const seedResult = await attemptRefresh(seedToken);
+      if (seedResult.ok) return seedResult.accessToken;
+      await alertFailure("seed", seedToken, seedResult.status, seedResult.body);
+      throw new Error(
+        `Failed to get GoPlay token: ${seedResult.status} ${seedResult.body}`,
+      );
+    }
+
+    await alertFailure("file", fileToken, result.status, result.body);
+    throw new Error(`Failed to get GoPlay token: ${result.status} ${result.body}`);
+  }
+
+  if (!seedToken) {
+    throw new Error(
+      "No GoPlay refresh token available: cache empty and GOPLAY_SEED_REFRESH_TOKEN not set",
+    );
+  }
+
+  const result = await attemptRefresh(seedToken);
+  if (result.ok) return result.accessToken;
+  await alertFailure("seed", seedToken, result.status, result.body);
+  throw new Error(`Failed to get GoPlay token: ${result.status} ${result.body}`);
+}
+
+async function alertFailure(
+  source: "file" | "seed",
+  refreshToken: string,
+  status: number,
+  body: string,
+): Promise<void> {
+  const alert =
+    `🔴 GoPlay token refresh FAILED\n` +
+    `run: ${PROCESS_TAG}\n` +
+    `status: ${status}\n` +
+    `source: ${source}\n` +
+    `refresh_token: ${refreshToken}\n` +
+    `body: ${body.slice(0, 300)}`;
+  await sendTelegramMessage(alert);
 }
 
 export async function fetchGoPlayFacilityAvailability(
