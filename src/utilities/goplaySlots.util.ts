@@ -5,7 +5,25 @@ import {
   parseHourStringToDecimal,
 } from "./date.utils";
 import { logWithTimestamp } from "./logger.utils";
+import { runThrottled } from "./general.util";
 import { GoPlaySlot, TimeSlot } from "./types.util";
+
+/**
+ * Throttling config for GoPlay requests. Instead of firing one request per
+ * date simultaneously (a 14-wide synchronized burst that looks automated),
+ * we cap concurrency and insert a small randomized delay between requests so
+ * the traffic resembles a person browsing dates rather than a scraper.
+ */
+const GOPLAY_MAX_CONCURRENCY = 2;
+const GOPLAY_MIN_DELAY_MS = 800;
+const GOPLAY_MAX_DELAY_MS = 2500;
+
+function randomDelayMs(): number {
+  return (
+    GOPLAY_MIN_DELAY_MS +
+    Math.floor(Math.random() * (GOPLAY_MAX_DELAY_MS - GOPLAY_MIN_DELAY_MS + 1))
+  );
+}
 
 /**
  * Filter out malformed slots missing start_time or duration_options.
@@ -183,8 +201,46 @@ export function filterSlotsByHourRange(
 }
 
 /**
- * Orchestrator: fetches availability for all dates in parallel,
- * finds qualifying blocks by chaining reservations, returns TimeSlots.
+ * Fetch and transform availability for a single date into qualifying TimeSlots.
+ */
+async function fetchGoPlaySlotsForDate(
+  facilityId: string,
+  date: Date,
+  startHour: number,
+  endHour: number,
+  minPlaytimeHours: number,
+): Promise<TimeSlot[]> {
+  const dateISO = formatDateISO(date);
+  const response = await fetchGoPlayFacilityAvailability([facilityId], dateISO);
+
+  const facility = response.facilities.find(
+    (f) => f.facility_id === facilityId,
+  );
+  if (!facility) return [];
+
+  const validSlots = filterMalformedSlots(
+    facility.available_slots as unknown[],
+    facilityId,
+  );
+
+  // Filter to configured hour range
+  const inRange = filterSlotsByHourRange(validSlots, startHour, endHour);
+
+  // Find blocks where chained reservations cover >= minPlaytime
+  const qualifying = findQualifyingBlocks(inRange, endHour, minPlaytimeHours);
+
+  const formattedDate = formatDate(date);
+  return qualifying.map((r) => ({
+    date: formattedDate,
+    start: r.start,
+    end: r.end,
+  }));
+}
+
+/**
+ * Orchestrator: fetches availability for all dates with bounded concurrency
+ * and jittered delays (to avoid a synchronized request burst), finds
+ * qualifying blocks by chaining reservations, returns TimeSlots.
  */
 export async function getGoPlaySlots(
   facilityId: string,
@@ -193,37 +249,21 @@ export async function getGoPlaySlots(
   endHour: number,
   minPlaytimeHours: number,
 ): Promise<TimeSlot[]> {
-  const requests = dates.map(async (date) => {
-    const dateISO = formatDateISO(date);
-    const response = await fetchGoPlayFacilityAvailability(
-      [facilityId],
-      dateISO,
-    );
+  const tasks = dates.map(
+    (date) => () =>
+      fetchGoPlaySlotsForDate(
+        facilityId,
+        date,
+        startHour,
+        endHour,
+        minPlaytimeHours,
+      ),
+  );
 
-    const facility = response.facilities.find(
-      (f) => f.facility_id === facilityId,
-    );
-    if (!facility) return [];
-
-    const validSlots = filterMalformedSlots(
-      facility.available_slots as unknown[],
-      facilityId,
-    );
-
-    // Filter to configured hour range
-    const inRange = filterSlotsByHourRange(validSlots, startHour, endHour);
-
-    // Find blocks where chained reservations cover >= minPlaytime
-    const qualifying = findQualifyingBlocks(inRange, endHour, minPlaytimeHours);
-
-    const formattedDate = formatDate(date);
-    return qualifying.map((r) => ({
-      date: formattedDate,
-      start: r.start,
-      end: r.end,
-    }));
-  });
-
-  const results = await Promise.all(requests);
+  const results = await runThrottled(
+    tasks,
+    GOPLAY_MAX_CONCURRENCY,
+    randomDelayMs,
+  );
   return results.flat();
 }

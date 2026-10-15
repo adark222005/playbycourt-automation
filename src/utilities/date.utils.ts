@@ -125,3 +125,7 @@ export function resolveScanDates(params: ScanCourtSlotsOptions): Date[] {
     skipWeekdays: params.skipWeekdays,
   });
 }
+
+export function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}

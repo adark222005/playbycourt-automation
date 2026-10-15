@@ -14,8 +14,7 @@ const REFRESH_TOKEN_FILE = path.resolve(
   "../../data/goplay_refresh_token",
 );
 
-// GoPlay account phone number in E.164 format (0543397331 -> +972543397331).
-const PHONE = "+972543397331";
+const PHONE = "+972549703232";
 
 function prompt(question: string): Promise<string> {
   const rl = readline.createInterface({
