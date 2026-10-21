@@ -1,5 +1,36 @@
-import { formatHourDecimalToTimeString } from "./date.utils";
+import { formatHourDecimalToTimeString, sleep } from "./date.utils";
 import { TimeSlot } from "./types.util";
+
+/**
+ * Run async tasks with a bounded concurrency and a jittered delay before each
+ * task (after the first slot in each worker). Preserves input order in the
+ * returned results array. Used to avoid synchronized request bursts against
+ * provider APIs.
+ */
+export async function runThrottled<T>(
+  tasks: (() => Promise<T>)[],
+  concurrency: number,
+  delayMsFn: () => number,
+): Promise<T[]> {
+  const results: T[] = new Array(tasks.length);
+  let nextIndex = 0;
+
+  async function worker(): Promise<void> {
+    while (true) {
+      const current = nextIndex++;
+      if (current >= tasks.length) return;
+      if (current >= concurrency) {
+        await sleep(delayMsFn());
+      }
+      results[current] = await tasks[current]();
+    }
+  }
+
+  const workerCount = Math.min(concurrency, tasks.length);
+  await Promise.all(Array.from({ length: workerCount }, () => worker()));
+
+  return results;
+}
 
 function formatSlotLine(slot: TimeSlot): string {
   return `• Free court on ${slot.date} between ${formatHourDecimalToTimeString(
