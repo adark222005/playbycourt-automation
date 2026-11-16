@@ -123,6 +123,13 @@ jobs:
           SCAN_MIN_PLAYTIME_HOURS: ${{ inputs.min_playtime_hours }}
         run: npx tsx src/jobs/findAvailableSlots.job.ts
 
+      # TEMPORARY: prints tokens in plain text. Remove after use.
+      - name: Print GoPlay tokens after run
+        if: always()
+        run: |
+          echo "refresh: $(cat data/goplay_refresh_token 2>/dev/null || echo 'not found')"
+          echo "access:  $(cat data/goplay_access_token.json 2>/dev/null || echo 'not found')"
+
       - name: Save rotated GoPlay refresh token to cache
         if: success()
         uses: actions/cache/save@v4
