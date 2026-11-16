@@ -32,7 +32,6 @@ export async function fetchGoPlayFacilityAvailability(
   if (!json || !Array.isArray(json.facilities)) {
     throw new Error("Invalid GoPlay response: missing facilities array");
   }
-  console.log(JSON.stringify(json, null, 2));
 
   return json as GoPlayAvailabilityResponse;
 }
