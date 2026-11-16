@@ -84,6 +84,12 @@ jobs:
           key: goplay-access-token-${{ github.run_id }}
           restore-keys: goplay-access-token-
 
+      # TEMPORARY: prints cached tokens in plain text. Remove after use.
+      - name: Print cached GoPlay tokens
+        run: |
+          echo "refresh: $(cat data/goplay_refresh_token 2>/dev/null || echo 'not found')"
+          echo "access:  $(cat data/goplay_access_token.json 2>/dev/null || echo 'not found')"
+
       - name: Install dependencies
         run: npm install
 
